@@ -1,6 +1,7 @@
 import atexit
+import hashlib
+import hmac
 import os
-
 from flask import Flask, request
 from apscheduler.schedulers.background import BackgroundScheduler
 from deployment_queue import publish_queued_assets, queue_asset_for_publication
@@ -25,6 +26,10 @@ atexit.register(lambda: scheduler.shutdown())
 def payload():
     headers = request.headers
 
+    # check for auth.
+    if not verify_signature(request):
+        return {"ok": False}
+
     # make sure we're only handling json data.
     content_type = headers.get("Content-Type", None)
     if content_type is None or content_type != "application/json":
@@ -48,5 +53,14 @@ def payload():
     return {"ok": True}
 
 
+def verify_signature(request_data):
+    signature = "sha256=" + hmac.new(
+        bytes(os.environ["SECRET_KEY"], 'utf-8'),
+        msg=request_data.data,
+        digestmod=hashlib.sha256
+    ).hexdigest().lower()
+    return hmac.compare_digest(signature, request_data.headers['X-Hub-Signature-256'])
+
+
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)
