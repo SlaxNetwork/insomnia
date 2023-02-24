@@ -1,5 +1,7 @@
 {
-  "bukkit-core": {
-    "common": true
+  "example-mc-app-0.0.1-all.jar": {
+    "servers": [
+      "lobby"
+    ]
   }
 }

@@ -7,7 +7,7 @@ GITHUB_KEY = os.environ["GITHUB_SECRET"]
 
 def prepare_asset_for_publication(assets_url: str):
     """
-    Find the jar asset and prepare it for GCS publication.
+    Find the jar asset and prepare it for MinIO publication.
     :param assets_url: All assets pertaining to a GitHub release.
     :return:
     """

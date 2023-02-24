@@ -9,50 +9,74 @@ client = Minio(
     # secure=bool(os.environ["MINIO_SECURE"]),
     secure=False
 )
-print("SECURE ", bool(os.environ['MINIO_SECURE']))
-
-
-class PluginDeployment:
-    common: bool
-
-    def __init__(self, common: bool):
-        self.common = common
 
 
 # TODO: fix this entire task being blocked by the thread.
 def publish_to_minio(name: str, jar_bytes: any, size: int):
     """
-    Publish the downloaded jar to the Google Cloud Storage instance,
+    Publish the downloaded jar to the MinIO instance,
     so it can be used to build servers for future deployments.
     :param name: jar name.
     :param jar_bytes: Bytes that make up an entire jar.
     :param size: size of the file.
     """
 
-    if not client.bucket_exists("servers"):
-        client.make_bucket("servers")
-        print("servers bucket didn't exist, creating.")
+    try:
+        # todo: use repo name
+        deployment = load_deployment_information(name)
+    except Exception as err:
+        raise err
+
+    if deployment is None:
+        print("No deployment strategy found.", flush=True)
+        return
+
+    if "common" in deployment and deployment["common"]:
+        deploy_common(name, jar_bytes, size)
+    elif "servers" in deployment and len(deployment["servers"]) > 0:
+        deploy_servers(name, jar_bytes, size, deployment["servers"])
+    else:
+        print("No deployment strategy found.", flush=True)
+
+
+def deploy_common(name: str, jar_bytes: any, size: int):
+    # create bucket
+    if not client.bucket_exists("server-common"):
+        client.make_bucket("server-common")
 
     res = client.put_object(
-        "servers",
-        name,
+        "server-common",
+        f"plugins/{name}",
         jar_bytes,
         length=size
     )
     print(f"Placed {name} at {res.location}")
 
 
-# todo
-def load_deployment_information(name: str) -> PluginDeployment:
-    with open("deployments.json", "wb") as f:
+def deploy_servers(name: str, jar_bytes: any, size: int, servers: list[str]):
+    # create buckets
+    for server in servers:
+        server_bucket_name = f"server-{server}"
+
+        if not client.bucket_exists(server_bucket_name):
+            client.make_bucket(server_bucket_name)
+            print(f"Creating bucket {server_bucket_name}.")
+
+        res = client.put_object(
+            server_bucket_name,
+            f"plugins/{name}",
+            jar_bytes,
+            length=size
+        )
+        print(f"Placed {name} at {res.location}")
+
+
+def load_deployment_information(name: str) -> any:
+    with open("deployments.json", "r") as f:
         deployments_json = json.load(f)
         f.close()
 
     if name not in deployments_json:
-        raise f"{name} is not a valid deployment."
+        return None
 
-    deployment_json = deployments_json[name]
-
-    return PluginDeployment(
-        bool(deployment_json['common'])
-    )
+    return deployments_json[name]
